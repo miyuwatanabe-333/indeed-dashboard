@@ -55,19 +55,6 @@ tbody tr:hover{background:var(--hover);}
 td.pcol{background:var(--paidbg);} td.fcol{background:var(--freebg);}
 th .ar{font-size:9px;opacity:.8;}
 footer{max-width:1200px;margin:0 auto;padding:0 18px 44px;font-size:11px;color:var(--sub);}
-/* 会社またぎ比較サマリー（C） */
-.xsum{background:#fff;border:1px solid var(--line);border-radius:12px;padding:6px 4px;overflow:auto;}
-.xsum table{border-collapse:collapse;width:100%;font-size:12.5px;white-space:nowrap;}
-.xsum th,.xsum td{padding:10px 13px;border-bottom:1px solid var(--line2);text-align:right;}
-.xsum th:first-child,.xsum td:first-child{text-align:left;}
-.xsum thead th{color:var(--sub);font-weight:700;border-bottom:1.5px solid var(--line);background:#fff;}
-.xsum tbody tr{cursor:pointer;}
-.xsum tbody tr:hover{background:var(--hover);}
-.xsum tbody tr.sel{background:var(--paidbg);}
-.xsum tbody tr.sel td:first-child{font-weight:700;color:var(--accent);box-shadow:inset 3px 0 0 var(--accent);}
-.xsum tr.total td{border-top:1.5px solid var(--line);font-weight:700;background:var(--panel);cursor:default;}
-.xsum tr.total:hover{background:var(--panel);}
-.xsum .per{font-size:11px;color:var(--sub);font-weight:600;}
 </style></head><body>
 <header>
   <h1>Indeed 広告 効果ダッシュボード</h1>
@@ -75,10 +62,8 @@ footer{max-width:1200px;margin:0 auto;padding:0 18px 44px;font-size:11px;color:v
   <div class="meta" id="metaline"></div>
 </header>
 <div class="wrap">
-  <h2>会社ごとの比較（集計期間つき）</h2>
-  <div class="xsum" id="xsum"></div>
   <div class="note" id="pernote"></div>
-  <div class="note">「無料」の数値は<b>広告をかけている求人と同じもの（参照番号一致）</b>だけを突き合わせています。CPA＝費用÷応募数。会社名は店舗名から自動判定。上のプルダウン（または上の表の行クリック）で会社を切り替え、並べ替えは見出しクリック、絞り込みは検索窓で。</div>
+  <div class="note">「無料」の数値は<b>広告をかけている求人と同じもの（参照番号一致）</b>だけを突き合わせています。CPA＝費用÷応募数。会社名は店舗名から自動判定。上のプルダウンで会社を切り替え、並べ替えは見出しクリック、絞り込みは検索窓で。</div>
   <h2>有料広告のサマリー</h2>
   <div class="kpis" id="kpis"></div>
   <h2>有料 vs 無料（同じ求人での比較）</h2>
@@ -108,21 +93,8 @@ const TABS=['K','C','J'];
 function selectCompany(i){CUR=+i;C=DATA.companies[CUR];sortKey=null;sortDir=-1;TAB='K';
  document.getElementById('company').value=CUR;
  TABS.forEach(t=>document.getElementById('tab'+t).classList.toggle('on',t=='K'));
- document.querySelectorAll('#xsum tbody tr').forEach((tr,idx)=>tr.classList.toggle('sel',idx==CUR));
  document.getElementById('q').value='';renderTop();render();}
 function renderXsum(){
- const rows=DATA.companies.map((c,i)=>{const T=c.totals;
-   return `<tr onclick="selectCompany(${i})" class="${i==CUR?'sel':''}">
-     <td>${c.name}</td><td class="per">${c.period}</td>
-     <td>${yen(T.cost)}</td><td>${int(T.p_app)}</td><td>${yen(T.cpa)}</td>
-     <td>${pct(T.ctr)}</td><td>${int(T.nstore)}</td><td>${int(T.njobs)}</td></tr>`;}).join('');
- const g={cost:0,p_app:0,nstore:0,njobs:0,p_imp:0,p_clk:0};
- DATA.companies.forEach(c=>{const T=c.totals;g.cost+=T.cost;g.p_app+=T.p_app;g.nstore+=T.nstore;g.njobs+=T.njobs;g.p_imp+=T.p_imp;g.p_clk+=T.p_clk;});
- const gctr=g.p_imp?g.p_clk/g.p_imp:0, gcpa=g.p_app?Math.round(g.cost/g.p_app):0;
- const total=`<tr class="total"><td>合計（${DATA.companies.length}社）</td><td class="per">—</td>
-   <td>${yen(g.cost)}</td><td>${int(g.p_app)}</td><td>${yen(gcpa)}</td><td>${pct(gctr)}</td><td>${int(g.nstore)}</td><td>${int(g.njobs)}</td></tr>`;
- document.getElementById('xsum').innerHTML=
-  `<table><thead><tr><th>会社</th><th>集計期間</th><th>広告費用</th><th>応募数</th><th>平均CPA</th><th>CTR</th><th>店舗数</th><th>求人数</th></tr></thead><tbody>${rows}${total}</tbody></table>`;
  const pers=[...new Set(DATA.companies.map(c=>c.period))];
  document.getElementById('pernote').innerHTML= pers.length>1
    ? `<b>⚠️ 会社ごとに集計期間が違います。</b> 費用や応募数をそのまま横並びで比べるときはご注意ください（${DATA.companies.map(c=>c.name+'＝'+c.period).join('　／　')}）。`
