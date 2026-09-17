@@ -202,42 +202,93 @@ function _airCamp(label,id,P){var T=P.total;return {camp:label,id:id,n:P.days.le
 function _airDays(id,label,P){var cid=id||label;return P.days.map(function(d){return {date:d.date,p_imp:d.imp,p_clk:d.clk,p_as:0,p_app:d.ap,cost:d.cost,cpc:d.clk?Math.round(d.cost/d.clk):0,ctr2:d.imp?+(d.clk/d.imp).toFixed(4):0,cpa:d.ap?Math.round(d.cost/d.ap):null,cid:cid};});}
 function _airRecalc(C){var t={cost:0,p_imp:0,p_clk:0,p_app:0};C.camps.forEach(function(k){t.cost+=k.cost;t.p_imp+=k.p_imp;t.p_clk+=k.p_clk;t.p_app+=k.p_app;});C.totals.cost=t.cost;C.totals.p_imp=t.p_imp;C.totals.p_clk=t.p_clk;C.totals.p_app=t.p_app;C.totals.f_imp=0;C.totals.f_clk=0;C.totals.f_app=0;C.totals.nfree=0;C.totals.ctr=t.p_imp?+(t.p_clk/t.p_imp).toFixed(4):0;C.totals.cpa=t.p_app?Math.round(t.cost/t.p_app):0;C.totals.njobs=C.camps.length;C.totals.nstore=1;C.paid_rows=C.days.length;}
 function _findAir(id){if(!id)return null;for(var i=0;i<DATA.companies.length;i++){var c=DATA.companies[i];if(c.media!='エアワーク'||!c.camps)continue;for(var j=0;j<c.camps.length;j++){if(c.camps[j].id&&c.camps[j].id==id)return {ci:i,cj:j};}}return null;}
+/* --- Indeed 取り込み用（会社判定・集計をJS移植） --- */
+function _num(v){var s=String(v==null?'':v).replace(/,/g,'').trim();if(s=='')return 0;var n=parseFloat(s);return isNaN(n)?0:n;}
+function _csvObj(text){var rows=_csv(text);if(!rows.length)return [];var h=rows[0].map(function(x){return (x||'').replace(/^﻿/,'').trim();});return rows.slice(1).filter(function(r){return r.length&&r.join('').trim()!='';}).map(function(r){var o={};for(var i=0;i<h.length;i++)o[h[i]]=r[i];return o;});}
+function _splitCompany(s){s=(s||'').replace(/\\\|/g,'｜').replace(/ \| /g,'｜');var CO=/(（株）|\(株\)|株式会社|（有）|\(有\)|有限会社|合同会社|（合）|\(合\)|合資会社)/;var m=CO.exec(s);if(!m)return [s.replace(/[\s　]+$/,'').trim(),'(会社名なし)'];if(m.index===0){var rest=s.slice(m.index+m[0].length).trim();var idx=rest.search(/[\s　]/);var cn=idx<0?rest:rest.slice(0,idx);var store=idx<0?'':rest.slice(idx).trim();var comp=(s.slice(0,m.index+m[0].length)+cn).trim();return [store.replace(/[\s　]+$/,'').trim(),comp];}var comp2=s.slice(m.index).trim();var st2=s.slice(0,m.index);return [st2.replace(/[\s　]+$/,'').trim(),comp2];}
+function _compShort(c){return (c||'').replace(/^(（株）|\(株\)|株式会社|（有）|\(有\)|有限会社|合同会社|（合）|\(合\)|合資会社)/,'').trim()||c;}
+function _parseIndeed(paidText,freeText){
+  var paid=_csvObj(paidText),free=_csvObj(freeText||'');
+  if(!paid.length||paid[0]['参照番号']===undefined||paid[0]['キャンペーン']===undefined)throw 0;
+  var fbr={};free.forEach(function(r){var ref=r['参照番号'];if(ref)fbr[ref]=r;});
+  var jobs=paid.map(function(r){var sc=_splitCompany(r['企業名']||'');var pimp=_num(r['表示回数']),pclk=_num(r['クリック数']),papp=_num(r['応募数']);var fr=fbr[r['参照番号']];return {store:sc[0],comp:_compShort(sc[1]),title:r['求人'],emp:r['雇用形態'],camp:(r['キャンペーン']||'').trim()||'(キャンペーン名なし)',p_imp:pimp,p_clk:pclk,p_as:_num(r['応募開始数']),p_app:papp,cost:_num(r['費用']),cpc:_num(r['クリック単価（CPC）']),cpa:papp?Math.round(_num(r['費用'])/papp):null,ctr2:pimp?+(pclk/pimp).toFixed(4):0,f_imp:fr?_num(fr['表示回数']):null,f_clk:fr?_num(fr['クリック数']):null,f_app:fr?_num(fr['応募数']):null,has_free:fr?1:0};});
+  return jobs;
+}
+function _indAgg(jobs){
+  var cm={},sm={};
+  jobs.forEach(function(j){
+    var c=cm[j.camp]||(cm[j.camp]={camp:j.camp,n:0,nfree:0,p_imp:0,p_clk:0,p_app:0,cost:0,f_imp:0,f_clk:0,f_app:0});
+    c.n++;c.p_imp+=j.p_imp;c.p_clk+=j.p_clk;c.p_app+=j.p_app;c.cost+=j.cost;if(j.has_free){c.nfree++;c.f_imp+=j.f_imp;c.f_clk+=j.f_clk;c.f_app+=j.f_app;}
+    var sk=j.comp+''+j.store;var s=sm[sk]||(sm[sk]={store:j.store,comp:j.comp,n:0,nfree:0,p_imp:0,p_clk:0,p_app:0,cost:0,f_imp:0,f_clk:0,f_app:0});
+    s.n++;s.p_imp+=j.p_imp;s.p_clk+=j.p_clk;s.p_app+=j.p_app;s.cost+=j.cost;if(j.has_free){s.nfree++;s.f_imp+=j.f_imp;s.f_clk+=j.f_clk;s.f_app+=j.f_app;}
+  });
+  function fin(o){o.cpa=o.p_app?Math.round(o.cost/o.p_app):null;o.ctr=o.p_imp?+(o.p_clk/o.p_imp).toFixed(4):0;o.cpc=o.p_clk?Math.round(o.cost/o.p_clk):null;o.tot_app=o.p_app+(o.f_app||0);return o;}
+  var camps=Object.keys(cm).map(function(k){return fin(cm[k]);}).sort(function(a,b){return b.cost-a.cost;});
+  var stores=Object.keys(sm).map(function(k){return fin(sm[k]);}).sort(function(a,b){return b.cost-a.cost;});
+  var T={cost:0,p_imp:0,p_clk:0,p_app:0,f_imp:0,f_clk:0,f_app:0};
+  jobs.forEach(function(j){T.cost+=j.cost;T.p_imp+=j.p_imp;T.p_clk+=j.p_clk;T.p_app+=j.p_app;if(j.has_free){T.f_imp+=j.f_imp;T.f_clk+=j.f_clk;T.f_app+=j.f_app;}});
+  T.njobs=jobs.length;T.nstore=stores.length;T.nfree=jobs.filter(function(j){return j.has_free;}).length;
+  T.ctr=T.p_imp?+(T.p_clk/T.p_imp).toFixed(4):0;T.cpa=T.p_app?Math.round(T.cost/T.p_app):0;
+  return {camps:camps,stores:stores,totals:T};
+}
 function buildDoc(data){var css=document.getElementById('css').textContent,app=document.getElementById('appjs').textContent,t=document.getElementById('t').textContent;return '<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'+'<title id="t">'+t+'</title><style id="css">'+css+'</style></head><body><div id="shell">'+SHELL_TEMPLATE+'</div>'+'<script type="application/json" id="appdata">'+JSON.stringify(data)+'<\/script>'+'<script id="appjs">'+app+'<\/script></body></html>';}
 function openImport(){
-  var airs=[];DATA.companies.forEach(function(c,i){if(c.media=='エアワーク')airs.push({i:i,name:c.name});});
-  var copts=airs.map(function(a){return '<option value="'+a.i+'">'+a.name+'</option>';}).join('')+'<option value="__new">＋ 新しい会社を作る</option>';
+  var comps=DATA.companies;
+  var copts=comps.map(function(c,i){return '<option value="'+i+'">'+c.name+'</option>';}).join('')+'<option value="__new">＋ 新しい会社を作る（エアワーク）</option>';
   var m=document.createElement('div');m.className='modal';m.id='impModal';
-  m.innerHTML='<div class="sheet"><div class="sheet-hd"><span>エアワークのシートを取り込む</span><button class="x" id="mx">✕</button></div>'
-   +'<div class="sheet-bd"><div class="hint">※ 現在はエアワークの取り込みに対応。Indeed（有料/無料）の取り込みは準備中です。</div>'
+  m.innerHTML='<div class="sheet"><div class="sheet-hd"><span>シートを取り込む</span><button class="x" id="mx">✕</button></div>'
+   +'<div class="sheet-bd">'
    +'<label class="fld"><span>会社</span><select id="mco">'+copts+'</select></label>'
    +'<label class="fld" id="mnw" hidden><span>新しい会社名</span><input id="mnew" placeholder="例：〇〇（エアワーク）"></label>'
+   +'<div id="gAir">'
    +'<label class="fld"><span>広告ラベル（期間つき推奨）</span><input id="mlabel" placeholder="例：土浦 2回目（9/20〜10/19）"></label>'
    +'<label class="fld"><span>エアワークのCSV（広告詳細）</span><input id="mfile" type="file" accept=".csv"></label>'
+   +'</div>'
+   +'<div id="gInd" hidden>'
+   +'<label class="fld"><span>有料のCSV（キャンペーン列あり）</span><input id="mfp" type="file" accept=".csv"></label>'
+   +'<label class="fld"><span>無料のCSV（キャンペーン列なし）</span><input id="mff" type="file" accept=".csv"></label>'
+   +'<label class="fld"><span>取り込み方</span><select id="mmode"><option value="merge">更新（同じキャンペーンを差し替え・新規は追加）</option><option value="replace">この会社を丸ごと置き換え</option></select></label>'
+   +'</div>'
    +'<div id="mprev" class="prev" hidden></div><div id="mmsg" class="msg" hidden></div></div>'
    +'<div class="sheet-ft"><button class="mbtn" id="mcancel">キャンセル</button><button class="mbtn primary" id="mgo" disabled>取り込んで全員に反映</button></div></div>';
   document.body.appendChild(m);
-  var P=null,meta={id:'',name:''},match=null;
+  var P=null,meta={id:'',name:''},match=null,IJ=null,paidTxt=null,freeTxt=null;
   var co=document.getElementById('mco'),nw=document.getElementById('mnw');
-  co.onchange=function(){nw.hidden=co.value!='__new';};
+  function curMedia(){return co.value=='__new'?'エアワーク':comps[+co.value].media;}
   function msg(s,e){var el=document.getElementById('mmsg');el.hidden=false;el.textContent=s;el.className='msg'+(e?' err':'');}
   function close(){var el=document.getElementById('impModal');if(el)el.remove();}
+  function syncFields(){var ind=curMedia()=='Indeed';document.getElementById('gInd').hidden=!ind;document.getElementById('gAir').hidden=ind;nw.hidden=co.value!='__new';P=null;IJ=null;paidTxt=null;freeTxt=null;document.getElementById('mgo').disabled=true;document.getElementById('mprev').hidden=true;document.getElementById('mmsg').hidden=true;}
+  co.onchange=function(){co.disabled=false;syncFields();};
   document.getElementById('mx').onclick=close;document.getElementById('mcancel').onclick=close;
-  document.getElementById('mfile').onchange=function(e){var f=e.target.files[0];if(!f)return;meta=_parseName(f.name);var rd=new FileReader();rd.onload=function(){try{P=_parseAir(rd.result);match=_findAir(meta.id);var pv=document.getElementById('mprev');pv.hidden=false;var head='読み取り：費用 <b>¥'+Math.round(P.total.cost).toLocaleString()+'</b> ／ 応募 <b>'+P.total.ap+'</b> 件 ／ 表示 '+Math.round(P.total.imp).toLocaleString()+' ／ '+P.days.length+'日分';var lab=document.getElementById('mlabel');if(match){var mc=DATA.companies[match.ci],mk=mc.camps[match.cj];co.value=String(match.ci);nw.hidden=true;co.disabled=true;lab.value=mk.camp;pv.innerHTML=head+'<br><b style="color:#0F9D58">✓ 同じ広告が見つかりました</b>：'+mc.name+' ／「'+mk.camp+'」をまとめて更新します。';}else{co.disabled=false;if(!lab.value)lab.value=meta.name;pv.innerHTML=head+'<br><b style="color:var(--accent)">＋ 新しい広告</b>として追加します。';}document.getElementById('mgo').disabled=false;document.getElementById('mmsg').hidden=true;}catch(err){P=null;msg('CSVを読み取れませんでした。エアワークの「広告詳細」CSVかご確認ください。',1);document.getElementById('mgo').disabled=true;}};rd.readAsText(f);};
+  document.getElementById('mfile').onchange=function(e){var f=e.target.files[0];if(!f)return;meta=_parseName(f.name);var rd=new FileReader();rd.onload=function(){try{P=_parseAir(rd.result);match=_findAir(meta.id);var pv=document.getElementById('mprev');pv.hidden=false;var head='読み取り：費用 <b>¥'+Math.round(P.total.cost).toLocaleString()+'</b> ／ 応募 <b>'+P.total.ap+'</b> 件 ／ 表示 '+Math.round(P.total.imp).toLocaleString()+' ／ '+P.days.length+'日分';var lab=document.getElementById('mlabel');if(match){var mc=DATA.companies[match.ci],mk=mc.camps[match.cj];co.value=String(match.ci);co.disabled=true;lab.value=mk.camp;pv.innerHTML=head+'<br><b style="color:#0F9D58">✓ 同じ広告が見つかりました</b>：'+mc.name+' ／「'+mk.camp+'」をまとめて更新します。';}else{if(!lab.value)lab.value=meta.name;pv.innerHTML=head+'<br><b style="color:var(--accent)">＋ 新しい広告</b>として追加します。';}document.getElementById('mgo').disabled=false;document.getElementById('mmsg').hidden=true;}catch(err){P=null;msg('CSVを読み取れませんでした。エアワークの「広告詳細」CSVかご確認ください。',1);document.getElementById('mgo').disabled=true;}};rd.readAsText(f);};
+  function tryIndeed(){if(!paidTxt)return;try{IJ=_parseIndeed(paidTxt,freeTxt||'');}catch(err){IJ=null;msg('有料CSVを読み取れませんでした。Indeedの「有料」CSV（キャンペーン列あり）かご確認ください。',1);document.getElementById('mgo').disabled=true;return;}var ag=_indAgg(IJ);var pv=document.getElementById('mprev');pv.hidden=false;var mode=document.getElementById('mmode').value;var note=mode=='replace'?'この会社を<b>丸ごと置き換え</b>ます。':'キャンペーン単位で<b>更新</b>（同名は差し替え・新規は追加）します。';pv.innerHTML='読み取り：費用 <b>¥'+Math.round(ag.totals.cost).toLocaleString()+'</b> ／ 応募 <b>'+ag.totals.p_app+'</b> 件 ／ 求人 '+IJ.length+' ／ キャンペーン '+ag.camps.length+' 件'+(freeTxt?'（無料CSVあり）':'（無料CSV未選択）')+'<br>'+note;document.getElementById('mgo').disabled=false;document.getElementById('mmsg').hidden=true;}
+  document.getElementById('mfp').onchange=function(e){var f=e.target.files[0];if(!f)return;var rd=new FileReader();rd.onload=function(){paidTxt=rd.result;tryIndeed();};rd.readAsText(f);};
+  document.getElementById('mff').onchange=function(e){var f=e.target.files[0];if(!f){freeTxt=null;if(paidTxt)tryIndeed();return;}var rd=new FileReader();rd.onload=function(){freeTxt=rd.result;tryIndeed();};rd.readAsText(f);};
+  document.getElementById('mmode').onchange=function(){if(IJ)tryIndeed();};
   document.getElementById('mgo').onclick=async function(){
-    if(!P){msg('先にCSVを選んでください。',1);return;}
-    var label=(document.getElementById('mlabel').value||'').trim();if(!label){msg('広告ラベルを入力してください。',1);return;}
-    var next=JSON.parse(JSON.stringify(DATA)),C;
-    if(match){C=next.companies[match.ci];C.camps[match.cj]=_airCamp(label,meta.id,P);C.days=C.days.filter(function(d){return d.cid!=(meta.id||'');});C.days=C.days.concat(_airDays(meta.id,label,P));_airRecalc(C);}
-    else{if(co.value=='__new'){var nm=(document.getElementById('mnew').value||'').trim();if(!nm){msg('新しい会社名を入力してください。',1);return;}C={name:nm,media:'エアワーク',period:'',hasfree:0,tabs:['K','D'],days:[],paid_rows:0,free_rows:0,report:null,report_file:null,isall:false,totals:{cost:0,p_imp:0,p_clk:0,p_app:0,f_imp:0,f_clk:0,f_app:0,njobs:0,nstore:1,nfree:0,ctr:0,cpa:0},stores:[],jobs:[],camps:[]};next.companies.push(C);}else{C=next.companies[+co.value];}
-      var hit=-1;for(var i=0;i<C.camps.length;i++){if(C.camps[i].camp==label){hit=i;break;}}
-      if(hit>=0){C.camps[hit]=_airCamp(label,meta.id,P);C.days=C.days.filter(function(d){return d.cid!=(meta.id||label);});}else{C.camps.push(_airCamp(label,meta.id,P));}
-      C.days=C.days.concat(_airDays(meta.id,label,P));_airRecalc(C);}
+    var media=curMedia(),next=JSON.parse(JSON.stringify(DATA)),C;
+    if(media=='Indeed'){
+      if(!IJ){msg('有料CSVを選んでください。',1);return;}
+      C=next.companies[+co.value];var mode=document.getElementById('mmode').value;
+      var up={};IJ.forEach(function(j){up[j.camp]=1;});
+      var newJobs=(mode=='replace')?IJ:((C.jobs||[]).filter(function(j){return !up[j.camp];}).concat(IJ));
+      var ag=_indAgg(newJobs);C.jobs=newJobs;C.camps=ag.camps;C.stores=ag.stores;C.totals=ag.totals;C.hasfree=1;C.paid_rows=newJobs.length;C.free_rows=newJobs.filter(function(j){return j.has_free;}).length;
+    }else{
+      if(!P){msg('先にCSVを選んでください。',1);return;}
+      var label=(document.getElementById('mlabel').value||'').trim();if(!label){msg('広告ラベルを入力してください。',1);return;}
+      if(match){C=next.companies[match.ci];C.camps[match.cj]=_airCamp(label,meta.id,P);C.days=C.days.filter(function(d){return d.cid!=(meta.id||'');});C.days=C.days.concat(_airDays(meta.id,label,P));_airRecalc(C);}
+      else{if(co.value=='__new'){var nm=(document.getElementById('mnew').value||'').trim();if(!nm){msg('新しい会社名を入力してください。',1);return;}C={name:nm,media:'エアワーク',period:'',hasfree:0,tabs:['K','D'],days:[],paid_rows:0,free_rows:0,report:null,report_file:null,isall:false,totals:{cost:0,p_imp:0,p_clk:0,p_app:0,f_imp:0,f_clk:0,f_app:0,njobs:0,nstore:1,nfree:0,ctr:0,cpa:0},stores:[],jobs:[],camps:[]};next.companies.push(C);}else{C=next.companies[+co.value];}
+        var hit=-1;for(var i=0;i<C.camps.length;i++){if(C.camps[i].camp==label){hit=i;break;}}
+        if(hit>=0){C.camps[hit]=_airCamp(label,meta.id,P);C.days=C.days.filter(function(d){return d.cid!=(meta.id||label);});}else{C.camps.push(_airCamp(label,meta.id,P));}
+        C.days=C.days.concat(_airDays(meta.id,label,P));_airRecalc(C);}
+    }
     var d=new Date();next.updated=d.getFullYear()+'/'+(d.getMonth()+1)+'/'+d.getDate();
     document.getElementById('mgo').disabled=true;msg('保存中…',0);
     var art=(window.claude&&window.claude.use)?await window.claude.use('artifact'):null;
     if(!art){msg('このページは閲覧のみのため保存できません（編集権限が必要です）。',1);document.getElementById('mgo').disabled=false;return;}
     try{await art.publish(buildDoc(next));msg('保存しました。全員のページが最新に更新されます。',0);}catch(err){var code=(err&&err.code)||'';msg(code=='not_writer'||code=='not_granted'?'閲覧のみのため保存できませんでした。':'保存に失敗しました（'+(code||'error')+'）。もう一度お試しください。',1);document.getElementById('mgo').disabled=false;}
   };
+  co.value=String(CUR);syncFields();
 }
 (async function(){try{var a=(window.claude&&window.claude.use)?await window.claude.use('artifact'):null;if(a){var b=document.getElementById('impBtn');if(b)b.hidden=false;}}catch(e){}})();
 </script></body></html>
