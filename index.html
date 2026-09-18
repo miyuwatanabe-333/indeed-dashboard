@@ -233,17 +233,18 @@ function _indAgg(jobs){
 }
 function _endOf(cn){var m=/(\d{4})年(\d{1,2})月(\d{1,2})日\s*[～~]\s*(\d{4})年(\d{1,2})月(\d{1,2})日/.exec(cn||'');if(!m)return null;return new Date(+m[4],+m[5]-1,+m[6]);}
 function _shortCampJS(c){var n=(c||'').split(/\s*￥/)[0].trim();n=n.replace(/\s*-\s*\d{4}年[\s\S]*$/,'').trim();return n||c;}
-async function _slackNewCamps(items){
-  if(!items||!items.length)return {ok:true,skipped:true};
+async function _slackImport(s){
   var mcp=(window.claude&&window.claude.use)?await window.claude.use('mcp'):null;
   if(!mcp)return {ok:false,reason:'no-mcp'};
   var WD=['月','火','水','木','金','土','日'];
   function dj(d){return (d.getMonth()+1)+'月'+d.getDate()+'日（'+WD[(d.getDay()+6)%7]+'）';}
   var now=new Date();
-  var lines=['🆕 *広告アラート｜新規キャンペーン取り込み*（'+(now.getMonth()+1)+'/'+now.getDate()+' 時点）','<@U03322ZQHFV> <@U0901JT2EMP>',''];
-  items.forEach(function(x){lines.push('▼ *'+x.company+'*');lines.push('　'+x.camp);lines.push('　⏰ 終了予定：*'+dj(x.end)+'*');lines.push('');});
-  lines.push('👉 ダッシュボードに取り込みました。');
-  lines.push('📊 https://miyuwatanabe-333.github.io/indeed-dashboard/');
+  var cpa=s.cpa?('¥'+Math.round(s.cpa).toLocaleString('ja-JP')):'—';
+  var lines=['🔄 *ダッシュボード更新*（'+(now.getMonth()+1)+'/'+now.getDate()+' 時点）','<@U03322ZQHFV> <@U0901JT2EMP>','',
+    '▼ *'+s.company+'*'+(s.period?'（'+s.period+'）':''),
+    '費用 ¥'+Math.round(s.cost||0).toLocaleString('ja-JP')+' ／ 応募 '+(s.ap||0)+'件 ／ 応募単価 '+cpa];
+  if(s.newItems&&s.newItems.length){lines.push('');lines.push('🆕 新規キャンペーン');s.newItems.forEach(function(x){lines.push('・'+x.camp+' … 終了予定 '+dj(x.end));});}
+  lines.push('');lines.push('👉 ダッシュボードに取り込みました。');lines.push('📊 https://miyuwatanabe-333.github.io/indeed-dashboard/');
   try{await mcp.callTool('Slack','slack_send_message',{channel_id:'C0BRTG97G4C',message:lines.join('\n')});return {ok:true};}
   catch(e){return {ok:false,reason:(e&&e.code)||'error'};}
 }
@@ -304,7 +305,8 @@ function openImport(){
     document.getElementById('mgo').disabled=true;msg('保存中…',0);
     var art=(window.claude&&window.claude.use)?await window.claude.use('artifact'):null;
     if(!art){msg('このページは閲覧のみのため保存できません（編集権限が必要です）。',1);document.getElementById('mgo').disabled=false;return;}
-    var slackNote='';if(notifyItems.length){var sr=await _slackNewCamps(notifyItems);slackNote=sr.ok?(sr.skipped?'':' 新規キャンペーンの終了予定をSlackにも通知しました。'):' ※Slack通知は送れませんでした（Slack連携が必要かもしれません）。';}
+    var summary={company:C.name,media:media,cost:C.totals.cost,ap:C.totals.p_app,cpa:C.totals.cpa,period:C.period||'',newItems:notifyItems};
+    var sr=await _slackImport(summary);var slackNote=sr.ok?' Slackに更新通知を送りました。':' ※Slack通知は送れませんでした（Slack連携が必要かもしれません）。';
     try{await art.publish(buildDoc(next));msg('保存しました。全員のページが最新に更新されます。'+slackNote,0);}catch(err){var code=(err&&err.code)||'';msg(code=='not_writer'||code=='not_granted'?'閲覧のみのため保存できませんでした。':'保存に失敗しました（'+(code||'error')+'）。もう一度お試しください。',1);document.getElementById('mgo').disabled=false;}
   };
   co.value=String(CUR);syncFields();
