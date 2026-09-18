@@ -244,7 +244,7 @@ async function _slackImport(s){
     '▼ *'+s.company+'*'+(s.period?'（'+s.period+'）':''),
     '費用 ¥'+Math.round(s.cost||0).toLocaleString('ja-JP')+' ／ 応募 '+(s.ap||0)+'件 ／ 応募単価 '+cpa];
   if(s.newItems&&s.newItems.length){lines.push('');lines.push('🆕 新規キャンペーン');s.newItems.forEach(function(x){lines.push('・'+x.camp+' … 終了予定 '+dj(x.end));});}
-  lines.push('');lines.push('👉 ダッシュボードに取り込みました。');lines.push('📊 https://miyuwatanabe-333.github.io/indeed-dashboard/');
+  lines.push('');lines.push('👉 ダッシュボードに取り込みました。');lines.push('📊 https://claude.ai/artifact/36sE2YVrn5n99G2uhwPthQ');
   try{await mcp.callTool('Slack','slack_send_message',{channel_id:'C0BRTG97G4C',message:lines.join('\n')});return {ok:true};}
   catch(e){return {ok:false,reason:(e&&e.code)||'error'};}
 }
