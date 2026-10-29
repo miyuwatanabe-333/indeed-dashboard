@@ -118,6 +118,7 @@ const yen=n=>(n==null?'-':'¥'+Number(n).toLocaleString());
 const int=n=>(n==null?'-':Number(n).toLocaleString());
 const pct=n=>(n==null?'-':(n*100).toFixed(1)+'%');
 let CUR=0, C=DATA.companies[0], TAB='K', sortKey=null, sortDir=-1;
+function _baseName(n){return String(n||'').replace(/[（(](?:エアワーク|Indeed|インディード)[)）]/g,'').replace(/株式会社|（株）|\(株\)/g,'').replace(/カンパニー/g,'').replace(/[\s　]+/g,'').trim();}
 document.getElementById('company').innerHTML=DATA.companies.map((c,i)=>`<option value="${i}">${c.name}</option>`).join('');
 const TABLBL={K:'キャンペーン別',C:'店舗別',J:'求人別',JA:'求人別',D:'日別',X:'会社ごと比較'};
 function renderTabs(){
@@ -142,7 +143,7 @@ function renderTop(){const T=C.totals;
   document.getElementById('sumttl').textContent='全企業サマリー（合計）';
   document.getElementById('freenote').style.display='none';
   kpis=[
-   ['対象の会社数',C.comps.length+'<small> 社</small>'],['広告費用（合計）',yen(T.cost)],['応募数（合計）',int(T.p_app)+'<small> 件</small>'],
+   ['対象の会社数',new Set(C.comps.map(x=>_baseName(x.name))).size+'<small> 社</small>'],['広告費用（合計）',yen(T.cost)],['応募数（合計）',int(T.p_app)+'<small> 件</small>'],
    ['平均CPA（応募単価）',yen(T.cpa)],['表示回数',int(T.p_imp)],['クリック数',int(T.p_clk)+'<small> ('+pct(T.ctr)+')</small>'],
   ];
  }else{
