@@ -1,3 +1,4 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title id="t">Indeed 広告 効果ダッシュボード</title><style id="css">
 /* 真っ白・シンプル・清潔（白基調＋青アクセント＋グレー、色は最小限） */
 :root{
@@ -224,7 +225,7 @@ function _periodFmt(s){return String(s).replace(/(\d{4})\/0?(\d+)\/0?(\d+)/,'$1/
 function _periodOf(c){
   var ds=(c.days||[]).map(function(d){return d.date;}).filter(Boolean).sort();
   var isAir=(c.media&&String(c.media).indexOf('エアワーク')>=0)||(String(c.name||'').indexOf('エアワーク')>=0);
-  // エアワークは実データ(日別)の範囲から最新期間を出す（手動ラベルが古くなるのを防ぐ）
+  // エアワークは掲載期間ラベル(c.period)があれば優先、無ければ実データ(日別)の範囲（手動ラベルが古くなるのを防ぐ）
   if(isAir&&ds.length&&!(c.period&&String(c.period).trim()))return _periodFmt(ds[0])+' 〜 '+_periodFmt(ds[ds.length-1]);
   if(c.period&&String(c.period).trim())return c.period;
   if(ds.length)return _periodFmt(ds[0])+' 〜 '+_periodFmt(ds[ds.length-1]);
@@ -285,16 +286,17 @@ function _indAgg(jobs){
 function _endOf(cn){var m=/(\d{4})年(\d{1,2})月(\d{1,2})日\s*[～~]\s*(\d{4})年(\d{1,2})月(\d{1,2})日/.exec(cn||'');if(!m)return null;return new Date(+m[4],+m[5]-1,+m[6]);}
 function _shortCampJS(c){var n=(c||'').split(/\s*￥/)[0].trim();n=n.replace(/\s*-\s*\d{4}年[\s\S]*$/,'').trim();return n||c;}
 function _periodFromJobs(jobs){var S=[],E=[];(jobs||[]).forEach(function(j){var m=/(\d{4})年(\d{1,2})月(\d{1,2})日\s*[～~]\s*(\d{4})年(\d{1,2})月(\d{1,2})日/.exec(j.camp||'');if(m){S.push(new Date(+m[1],+m[2]-1,+m[3]).getTime());E.push(new Date(+m[4],+m[5]-1,+m[6]).getTime());}});if(!S.length)return null;function f(t){var d=new Date(t);return d.getFullYear()+'/'+(d.getMonth()+1)+'/'+d.getDate();}return f(Math.min.apply(null,S))+' 〜 '+f(Math.max.apply(null,E));}
+function _campPeriodJS(cn){var m=/(\d{4})年(\d{1,2})月(\d{1,2})日\s*[～~]\s*(\d{4})年(\d{1,2})月(\d{1,2})日/.exec(cn||'');if(!m)return '';return m[1]+'/'+(+m[2])+'/'+(+m[3])+' 〜 '+m[4]+'/'+(+m[5])+'/'+(+m[6]);}
+function _airPeriod(label,P){var m=/（([^（）]*[〜~～][^（）]*)）/.exec(label||'');if(m)return m[1].trim();var ds=(P&&P.days)?P.days.map(function(d){return d.date;}).filter(Boolean).sort():[];if(!ds.length)return '';return _periodFmt(ds[0])+' 〜 '+_periodFmt(ds[ds.length-1]);}
 async function _slackImport(s){
   var mcp=(window.claude&&window.claude.use)?await window.claude.use('mcp'):null;
   if(!mcp)return {ok:false,reason:'no-mcp'};
   var WD=['月','火','水','木','金','土','日'];
   function dj(d){return (d.getMonth()+1)+'月'+d.getDate()+'日（'+WD[(d.getDay()+6)%7]+'）';}
   var now=new Date();
-  var cpa=s.cpa?('¥'+Math.round(s.cpa).toLocaleString('ja-JP')):'—';
-  var lines=['🔄 *ダッシュボード更新*（'+(now.getMonth()+1)+'/'+now.getDate()+' 時点）','<@U03322ZQHFV> <@U0901JT2EMP>','',
-    '▼ *'+s.company+'*'+(s.period?'（'+s.period+'）':''),
-    '費用 ¥'+Math.round(s.cost||0).toLocaleString('ja-JP')+' ／ 応募 '+(s.ap||0)+'件 ／ 応募単価 '+cpa];
+  var lines=['🔄 *ダッシュボード更新*（'+(now.getMonth()+1)+'/'+now.getDate()+' 時点）','<@U03322ZQHFV> <@U0901JT2EMP>','','※「今 有料でかけている分」だけの数値です。'];
+  var items=(s.items&&s.items.length)?s.items:[{company:s.company,camp:'',period:s.period,cost:s.cost,ap:s.ap,cpa:s.cpa}];
+  items.forEach(function(it){var cpa=it.cpa?('¥'+Math.round(it.cpa).toLocaleString('ja-JP')):'—';lines.push('');lines.push('▼ *'+it.company+(it.camp?'｜'+it.camp:'')+'*'+(it.period?'（'+it.period+'）':''));lines.push('費用 ¥'+Math.round(it.cost||0).toLocaleString('ja-JP')+' ／ 応募 '+(it.ap||0)+'件 ／ 応募単価 '+cpa);});
   if(s.newItems&&s.newItems.length){lines.push('');lines.push('🆕 新規キャンペーン');s.newItems.forEach(function(x){lines.push('・'+x.camp+' … 終了予定 '+dj(x.end));});}
   lines.push('');lines.push('👉 ダッシュボードに取り込みました。');lines.push('📊 https://claude.ai/artifact/36sE2YVrn5n99G2uhwPthQ');
   try{await mcp.callTool('Slack','slack_send_message',{channel_id:'C0BRTG97G4C',message:lines.join('\n')});return {ok:true};}
@@ -345,7 +347,7 @@ function openImport(){
   document.getElementById('mf2').onchange=_readInd;
   document.getElementById('mmode').onchange=function(){if(paidTxt||freeTxt)tryIndeed();};
   document.getElementById('mgo').onclick=async function(){
-    var media=curMedia(),next=JSON.parse(JSON.stringify(DATA)),C,notifyItems=[];
+    var media=curMedia(),next=JSON.parse(JSON.stringify(DATA)),C,notifyItems=[],slackItems=[];
     if(media=='Indeed'){
       C=next.companies[+co.value];var mode=document.getElementById('mmode').value;
       if(paidTxt&&IJ){
@@ -354,11 +356,13 @@ function openImport(){
         Object.keys(up).forEach(function(cn){if(!existing[cn]){var e=_endOf(cn);if(e)notifyItems.push({company:C.name,camp:_shortCampJS(cn),end:e});}});
         var newJobs=(mode=='replace')?IJ:((C.jobs||[]).filter(function(j){return !up[j.camp];}).concat(IJ));
         var ag=_indAgg(newJobs);C.jobs=newJobs;C.camps=ag.camps;C.stores=ag.stores;C.totals=ag.totals;C.hasfree=1;C.paid_rows=newJobs.length;C.free_rows=newJobs.filter(function(j){return j.has_free;}).length;var per=_periodFromJobs(newJobs);if(per)C.period=per;
+        var agUp=_indAgg(IJ);slackItems=agUp.camps.map(function(k){return {company:C.name,camp:_shortCampJS(k.camp),period:_campPeriodJS(k.camp),cost:k.cost,ap:k.p_app,cpa:k.cpa};});
       }else if(freeTxt){
         var free=_csvObj(freeTxt);var fbr={};free.forEach(function(r){if(r['参照番号'])fbr[r['参照番号']]={fi:_num(r['表示回数']),fc:_num(r['クリック数']),fa:_num(r['応募数'])};});
         var matched=0;(C.jobs||[]).forEach(function(j){var fr=j.ref?fbr[j.ref]:null;if(fr){j.f_imp=fr.fi;j.f_clk=fr.fc;j.f_app=fr.fa;j.has_free=1;matched++;}});
         if(!matched){msg('この会社の求人と無料CSVが一致しませんでした（参照番号）。先に有料CSVを1回取り込むと、次回から無料だけの更新ができます。',1);document.getElementById('mgo').disabled=false;return;}
         var ag2=_indAgg(C.jobs);C.camps=ag2.camps;C.stores=ag2.stores;C.totals=ag2.totals;C.free_rows=C.jobs.filter(function(j){return j.has_free;}).length;
+        slackItems=[{company:C.name,camp:'（無料数値の更新）',period:C.period||'',cost:C.totals.cost,ap:C.totals.p_app,cpa:C.totals.cpa}];
       }else{msg('CSVを選んでください。',1);return;}
     }else{
       if(!P){msg('先にCSVを選んでください。',1);return;}
@@ -371,12 +375,13 @@ function openImport(){
         var hit=-1;for(var i=0;i<C.camps.length;i++){if(C.camps[i].camp==label){hit=i;break;}}
         if(hit>=0){var _pv2=C.camps[hit];C.camps[hit]=_airCamp(label,meta.id,P,_kv(_pv2,_ns,'nstore'),_kv(_pv2,_nj,'njobs'));C.days=C.days.filter(function(d){return d.cid!=(meta.id||label);});}else{C.camps.push(_airCamp(label,meta.id,P,_ns,_nj));}
         C.days=C.days.concat(_airDays(meta.id,label,P));_airRecalc(C);}
+      slackItems=[{company:C.name,camp:_shortCampJS(label),period:_airPeriod(label,P),cost:P.total.cost,ap:P.total.ap,cpa:(P.total.ap?Math.round(P.total.cost/P.total.ap):null)}];
     }
     var d=new Date();next.updated=d.getFullYear()+'/'+(d.getMonth()+1)+'/'+d.getDate();
     document.getElementById('mgo').disabled=true;msg('保存中…',0);
     var art=(window.claude&&window.claude.use)?await window.claude.use('artifact'):null;
     if(!art){msg('このページは閲覧のみのため保存できません（編集権限が必要です）。',1);document.getElementById('mgo').disabled=false;return;}
-    var summary={company:C.name,media:media,cost:C.totals.cost,ap:C.totals.p_app,cpa:C.totals.cpa,period:C.period||'',newItems:notifyItems};
+    var summary={company:C.name,media:media,items:slackItems,newItems:notifyItems};
     var sr=await _slackImport(summary);var slackNote=sr.ok?' Slackに更新通知を送りました。':' ※Slack通知は送れませんでした（Slack連携が必要かもしれません）。';
     try{await art.publish(buildDoc(next));msg('保存しました。全員のページが最新に更新されます。'+slackNote,0);}catch(err){var code=(err&&err.code)||'';msg(code=='not_writer'||code=='not_granted'?'閲覧のみのため保存できませんでした。':'保存に失敗しました（'+(code||'error')+'）。もう一度お試しください。',1);document.getElementById('mgo').disabled=false;}
   };
@@ -384,3 +389,4 @@ function openImport(){
 }
 (async function(){try{var a=(window.claude&&window.claude.use)?await window.claude.use('artifact'):null;if(a){var b=document.getElementById('impBtn');if(b)b.hidden=false;}}catch(e){}})();
 </script></body></html>
+</body></html>
